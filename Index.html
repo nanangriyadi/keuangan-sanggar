@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Buku Kas Acara — Anggaran Acara</title>
+<meta name="description" content="Papan pantau anggaran acara — data langsung dari Google Sheets, hanya untuk dilihat." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#FBF8F1',
+          paperDeep: '#F1ECDF',
+          ink: '#1D2B4F',
+          ledger: '#1B4332',
+          ledgerDeep: '#123024',
+          gold: '#C9A227',
+          rose: '#B0344A',
+          stone: '#8B8378',
+          line: '#DAD3C2',
+        },
+        fontFamily: {
+          display: ['Spectral', 'serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  body {
+    background-color: #FBF8F1;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(27,67,50,0.055) 28px),
+      radial-gradient(circle at 100% 0%, rgba(201,162,39,0.10), transparent 45%);
+  }
+
+  /* Torn / perforated receipt edge */
+  .receipt-edge {
+    position: relative;
+  }
+  .receipt-edge::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -11px;
+    height: 22px;
+    background:
+      radial-gradient(circle at 12px 0, transparent 12px, #FBF8F1 13px) 0 -11px / 24px 22px repeat-x;
+  }
+
+  .stamp {
+    transform: rotate(-4deg);
+  }
+
+  ::selection { background: #C9A227; color: #1D2B4F; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  .pulse-dot {
+    animation: pulse-dot 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .fade-in {
+    animation: fade-in 0.5s ease-out both;
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, #EFE9DA 25%, #F6F1E5 37%, #EFE9DA 63%);
+    background-size: 400% 100%;
+    animation: skeleton-loading 1.4s ease infinite;
+  }
+  @keyframes skeleton-loading {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+  }
+</style>
+</head>
+
+<body class="min-h-screen font-body text-ink antialiased">
+
+  <!-- ============ HEADER ============ -->
+  <header class="bg-ledger text-paper">
+    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-gold/90 mb-2">Buku Kas Digital</p>
+          <h1 id="judul-acara" class="font-display font-semibold text-3xl sm:text-4xl leading-tight text-paper skeleton rounded w-64 h-9 sm:h-10">&nbsp;</h1>
+          <p class="mt-2 text-sm text-paper/70 max-w-md">Setiap pengeluaran tercatat rapi, langsung dari sumbernya.</p>
+        </div>
+        <div class="hidden sm:flex flex-col items-end gap-2 shrink-0">
+          <div class="stamp border-2 border-gold/70 text-gold rounded-sm px-3 py-1.5 text-[11px] font-mono tracking-widest uppercase">
+            Data Langsung
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center gap-2 text-xs font-mono text-paper/60">
+        <span class="relative flex h-2 w-2">
+          <span class="pulse-dot absolute inline-flex h-full w-full rounded-full bg-gold"></span>
+        </span>
+        <span id="status-sinkron">Menghubungkan ke Google Sheets…</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-5 sm:px-8">
+
+    <!-- ============ RINGKASAN (RECEIPT) ============ -->
+    <section class="-mt-6 sm:-mt-8 relative z-10">
+      <div class="receipt-edge bg-white rounded-t-sm shadow-[0_8px_30px_rgba(29,43,79,0.10)] px-5 sm:px-8 pt-7 pb-9 border border-line">
+
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="font-display text-lg text-ink/80">Ringkasan Anggaran</h2>
+          <span class="font-mono text-[11px] text-stone">#REG-01</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-dashed divide-line">
+          <div class="py-4 sm:py-0 sm:px-6 first:pt-0 first:sm:pl-0">
+            <p class="text-xs uppercase tracking-widest text-stone mb-1.5">Total Anggaran</p>
+            <p id="total-anggaran" class="font-mono text-2xl sm:text-[26px] font-semibold text-ink skeleton rounded w-40 h-8">&nbsp;</p>
+          </div>
+          <div class="py-4 sm:py-0 sm:px-6">
+            <p class="text-xs uppercase tracking-widest text-stone mb-1.5">Total Terpakai</p>
+            <p id="total-biaya" class="font-mono text-2xl sm:text-[26px] font-semibold text-rose skeleton rounded w-40 h-8">&nbsp;</p>
+          </div>
+          <div class="py-4 sm:py-0 sm:px-6 last:pb-0 last:sm:pr-0">
+            <p class="text-xs uppercase tracking-widest text-stone mb-1.5">Saldo Akhir</p>
+            <p id="saldo-akhir" class="font-mono text-2xl sm:text-[26px] font-semibold text-ledger skeleton rounded w-40 h-8">&nbsp;</p>
+          </div>
+        </div>
+
+        <div class="mt-7">
+          <div class="flex justify-between text-[11px] font-mono text-stone mb-1.5">
+            <span>Terpakai</span>
+            <span id="persentase-label">—</span>
+          </div>
+          <div class="h-2.5 rounded-full bg-paperDeep overflow-hidden border border-line/70">
+            <div id="progress-bar" class="h-full bg-gold rounded-full transition-all duration-700 ease-out" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LEDGER TABLE (DESKTOP) ============ -->
+    <section class="mt-16 pb-6">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="font-display text-xl text-ink">Catatan Transaksi</h2>
+        <span id="jumlah-transaksi" class="font-mono text-xs text-stone">— entri</span>
+      </div>
+
+      <!-- Desktop / tablet table -->
+      <div class="hidden md:block rounded-sm border border-line overflow-hidden bg-white shadow-sm">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-ledger text-paper/90 text-left font-mono text-[11px] uppercase tracking-wider">
+              <th class="py-3 pl-5 pr-3 font-medium">Detail Pengeluaran</th>
+              <th class="py-3 px-3 font-medium">Kategori</th>
+              <th class="py-3 px-3 font-medium text-right">Anggaran</th>
+              <th class="py-3 px-3 font-medium text-right">Biaya</th>
+              <th class="py-3 px-3 font-medium text-right">Saldo</th>
+              <th class="py-3 px-3 font-medium">Tanggal</th>
+              <th class="py-3 px-3 font-medium">Dibayar Oleh</th>
+              <th class="py-3 pr-5 pl-3 font-medium">Catatan</th>
+            </tr>
+          </thead>
+          <tbody id="tabel-body" class="divide-y divide-line/70">
+            <!-- baris diisi oleh JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile cards -->
+      <div id="kartu-mobile" class="md:hidden space-y-3">
+        <!-- kartu diisi oleh JavaScript -->
+      </div>
+
+      <p id="pesan-kosong" class="hidden text-center text-sm text-stone py-14 font-display italic">
+        Belum ada transaksi tercatat.
+      </p>
+      <p id="pesan-error" class="hidden text-center text-sm text-rose py-14 max-w-md mx-auto"></p>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-line">
+    <div class="max-w-5xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <p class="text-xs text-stone max-w-sm leading-relaxed">
+        <!-- Halaman ini hanya menampilkan data. Semua perubahan — tambah, ubah, atau hapus transaksi — dilakukan langsung di Google Sheets. -->
+      </p>
+      <p id="last-sync" class="font-mono text-[11px] text-stone/80 whitespace-nowrap">—</p>
+    </div>
+  </footer>
+
+<script>
+  // ================================================================
+  // GANTI URL DI BAWAH DENGAN URL WEB APP APPS SCRIPT ANDA (diakhiri /exec)
+  // ================================================================
+  const API_URL = "https://script.google.com/macros/s/AKfycbxPwrcqevzWa37CP1nN1lK_FSlo-au_yfflBUIy7rzyGwtDPm8W3pLSyLn7bQauIilpdg/exec";
+
+  const rupiah = (n) =>
+    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
+
+  // Palet warna kategori — konsisten walau kategori baru ditambahkan di sheet
+  const paletKategori = [
+    { bg: 'bg-gold/15',   text: 'text-gold',    dot: 'bg-gold'   },
+    { bg: 'bg-rose/10',   text: 'text-rose',    dot: 'bg-rose'   },
+    { bg: 'bg-ledger/10', text: 'text-ledger',  dot: 'bg-ledger' },
+    { bg: 'bg-ink/10',    text: 'text-ink',     dot: 'bg-ink'    },
+    { bg: 'bg-stone/15',  text: 'text-stone',   dot: 'bg-stone'  },
+  ];
+  const kategoriTetap = {
+    'kas': paletKategori[0],
+    'makanan': paletKategori[1],
+    'aktivitas': paletKategori[2],
+    'transportasi': paletKategori[3],
+  };
+  function warnaKategori(nama) {
+    const key = String(nama || '').trim().toLowerCase();
+    if (kategoriTetap[key]) return kategoriTetap[key];
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    return paletKategori[Math.abs(hash) % paletKategori.length];
+  }
+
+  function inisial(nama) {
+    if (!nama || nama === '-') return '?';
+    const bagian = nama.trim().split(/\s+/);
+    return (bagian[0][0] + (bagian[1] ? bagian[1][0] : '')).toUpperCase();
+  }
+
+  function tandaiEmpty(el) {
+    el.classList.remove('skeleton', 'w-40', 'w-64', 'h-8', 'h-9', 'sm:h-10');
+  }
+
+  function render(data) {
+    document.getElementById('judul-acara').textContent = data.namaAcara || 'Anggaran Acara';
+    tandaiEmpty(document.getElementById('judul-acara'));
+
+    const r = data.ringkasan;
+    const elAnggaran = document.getElementById('total-anggaran');
+    const elBiaya = document.getElementById('total-biaya');
+    const elSaldo = document.getElementById('saldo-akhir');
+    elAnggaran.textContent = rupiah(r.totalAnggaran); tandaiEmpty(elAnggaran);
+    elBiaya.textContent = rupiah(r.totalBiaya); tandaiEmpty(elBiaya);
+    elSaldo.textContent = rupiah(r.saldoAkhir); tandaiEmpty(elSaldo);
+
+    if (r.saldoAkhir < 0) {
+      elSaldo.classList.remove('text-ledger');
+      elSaldo.classList.add('text-rose');
+    }
+
+    const pct = Math.min(100, Math.max(0, r.persentaseTerpakai));
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-bar').classList.toggle('bg-rose', pct >= 90);
+    document.getElementById('progress-bar').classList.toggle('bg-gold', pct < 90);
+    document.getElementById('persentase-label').textContent = pct + '% dari anggaran';
+
+    const list = data.transaksi || [];
+    document.getElementById('jumlah-transaksi').textContent = list.length + (list.length === 1 ? ' entri' : ' entri');
+
+    const tbody = document.getElementById('tabel-body');
+    const kartuWrap = document.getElementById('kartu-mobile');
+    const pesanKosong = document.getElementById('pesan-kosong');
+    tbody.innerHTML = '';
+    kartuWrap.innerHTML = '';
+
+    if (list.length === 0) {
+      pesanKosong.classList.remove('hidden');
+      return;
+    }
+    pesanKosong.classList.add('hidden');
+
+    list.forEach((t, i) => {
+      const warna = warnaKategori(t.kategori);
+
+      // ---- baris tabel desktop ----
+      const tr = document.createElement('tr');
+      tr.className = 'fade-in ' + (i % 2 === 1 ? 'bg-paper/60' : 'bg-white') + ' hover:bg-paperDeep/50 transition-colors';
+      tr.style.animationDelay = (i * 30) + 'ms';
+      tr.innerHTML = `
+        <td class="py-3.5 pl-5 pr-3 font-medium text-ink">${escapeHtml(t.deskripsi)}</td>
+        <td class="py-3.5 px-3">
+          <span class="inline-flex items-center gap-1.5 ${warna.bg} ${warna.text} text-xs font-medium px-2.5 py-1 rounded-full">
+            <span class="w-1.5 h-1.5 rounded-full ${warna.dot}"></span>${escapeHtml(t.kategori)}
+          </span>
+        </td>
+        <td class="py-3.5 px-3 text-right font-mono text-ink/80">${t.anggaran ? rupiah(t.anggaran) : '—'}</td>
+        <td class="py-3.5 px-3 text-right font-mono ${t.biaya ? 'text-rose' : 'text-ink/40'}">${t.biaya ? rupiah(t.biaya) : '—'}</td>
+        <td class="py-3.5 px-3 text-right font-mono text-ledger font-medium">${rupiah(t.saldo)}</td>
+        <td class="py-3.5 px-3 font-mono text-xs text-stone whitespace-nowrap">${escapeHtml(t.tanggal || '—')}</td>
+        <td class="py-3.5 px-3">
+          <span class="inline-flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-ink/10 text-ink text-[10px] font-semibold flex items-center justify-center">${inisial(t.dibayarOleh)}</span>
+            <span class="text-xs text-ink/70">${escapeHtml(t.dibayarOleh)}</span>
+          </span>
+        </td>
+        <td class="py-3.5 pr-5 pl-3 text-xs text-stone italic max-w-[160px] truncate" title="${escapeHtml(t.catatan)}">${escapeHtml(t.catatan) || '—'}</td>
+      `;
+      tbody.appendChild(tr);
+
+      // ---- kartu mobile ----
+      const card = document.createElement('div');
+      card.className = 'fade-in bg-white border border-line rounded-sm p-4 shadow-sm';
+      card.style.animationDelay = (i * 30) + 'ms';
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <p class="font-medium text-ink leading-snug">${escapeHtml(t.deskripsi)}</p>
+          <span class="inline-flex items-center gap-1.5 ${warna.bg} ${warna.text} text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0">
+            <span class="w-1.5 h-1.5 rounded-full ${warna.dot}"></span>${escapeHtml(t.kategori)}
+          </span>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center border-y border-dashed border-line py-2.5 mb-3">
+          <div>
+            <p class="text-[10px] uppercase text-stone tracking-wide">Anggaran</p>
+            <p class="font-mono text-xs mt-0.5">${t.anggaran ? rupiah(t.anggaran) : '—'}</p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase text-stone tracking-wide">Biaya</p>
+            <p class="font-mono text-xs mt-0.5 ${t.biaya ? 'text-rose' : ''}">${t.biaya ? rupiah(t.biaya) : '—'}</p>
+          </div>
+          <div>
+            <p class="text-[10px] uppercase text-stone tracking-wide">Saldo</p>
+            <p class="font-mono text-xs mt-0.5 text-ledger font-medium">${rupiah(t.saldo)}</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between text-xs text-stone">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-5 h-5 rounded-full bg-ink/10 text-ink text-[9px] font-semibold flex items-center justify-center">${inisial(t.dibayarOleh)}</span>
+            ${escapeHtml(t.dibayarOleh)}
+          </span>
+          <span class="font-mono">${escapeHtml(t.tanggal || '—')}</span>
+        </div>
+        ${t.catatan ? `<p class="mt-2.5 text-xs text-stone italic border-l-2 border-gold/50 pl-2">${escapeHtml(t.catatan)}</p>` : ''}
+      `;
+      kartuWrap.appendChild(card);
+    });
+  }
+
+  function escapeHtml(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function tampilkanError(pesan) {
+    document.getElementById('status-sinkron').textContent = 'Gagal menyinkronkan';
+    const el = document.getElementById('pesan-error');
+    el.textContent = pesan;
+    el.classList.remove('hidden');
+  }
+
+  async function muatData() {
+    if (!API_URL || API_URL.includes('PASTE_URL')) {
+      tampilkanError('API_URL belum diatur. Buka file index.html dan tempel URL web app Apps Script Anda pada variabel API_URL.');
+      return;
+    }
+    try {
+      const res = await fetch(API_URL, { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.success) {
+        tampilkanError(data.error || 'Terjadi kesalahan saat memuat data.');
+        return;
+      }
+      render(data);
+      document.getElementById('status-sinkron').textContent = 'Tersinkron dengan Google Sheets';
+      document.getElementById('last-sync').textContent =
+        'Diperbarui ' + new Date(data.diperbarui).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    } catch (err) {
+      tampilkanError('Tidak dapat terhubung ke Google Sheets. Periksa koneksi atau URL API.');
+    }
+  }
+
+  muatData();
+  setInterval(muatData, 60000); // sinkron ulang otomatis tiap 60 detik, tanpa tombol
+</script>
+</body>
+</html>
