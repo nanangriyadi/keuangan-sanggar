@@ -78,3 +78,6 @@ dan menyegarkan diri sendiri setiap 60 detik, tanpa perlu tombol apa pun.
   dihitung.
 - Kategori baru yang ditambahkan di sheet akan otomatis mendapat warna label
   di dashboard, tanpa perlu mengubah kode.
+
+  ##Link Sheet
+  - Link : https://docs.google.com/spreadsheets/d/1XAiqxS965_Gh4_O2dMUWCfW7sSa3tPMKMZDYCVTjcNU/edit?usp=sharing
