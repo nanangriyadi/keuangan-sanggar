@@ -43,6 +43,20 @@
       repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(27,67,50,0.055) 28px),
       radial-gradient(circle at 100% 0%, rgba(201,162,39,0.10), transparent 45%);
   }
+  /* Watermark logo — Sanggar Makanthi, fixed & centered behind all content */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url('assets/logo.png');
+    
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: min(60vw, 560px);
+    opacity: 0.06;
+    pointer-events: none;
+    z-index: 0;
+  }
 
   /* Torn / perforated receipt edge */
   .receipt-edge {
